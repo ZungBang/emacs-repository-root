@@ -27,7 +27,7 @@
 ;; This package provides a utility for deducing the repository root directory
 ;; for a given file, based on pre-defined or user provided matching criteria.
 ;;
-;; It is specifically designed to be useful in a heterogenous environment,
+;; It is specifically designed to be useful in a heterogeneous environment,
 ;; where the developer is using several source control tools and types of
 ;; projects.
 ;;
@@ -150,7 +150,7 @@ that matches RE."
   "Debian source package root directory matching criterion."
   )
 
-(defconst repository-root-matcher/autoconf (cons 'repository-root-rule/root-contains "configure")
+(defconst repository-root-matcher/autoconf (cons 'repository-root-rule/root-contains-regexp "configure\\(\\.ac\\)?")
   "Autoconf source package root directory matching criterion."
   )
 
