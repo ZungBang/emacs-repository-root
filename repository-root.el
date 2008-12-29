@@ -4,6 +4,7 @@
 
 ;; Author: Avi Rozen <avi.rozen@gmail.com>
 ;; Keywords: project, repository, root
+;; Version: %Id:%
 
 ;; This file is NOT part of GNU Emacs.
 
