@@ -139,6 +139,14 @@ that matches RE."
   "Git repository root directory matching criterion."
   )
 
+(defconst repository-root-matcher/git-submodules (lambda (parent-path-to-test path)
+                                                   (and (repository-root-rule/root-contains parent-path-to-test path ".gitmodules")
+                                                        (repository-root-rule/root-contains parent-path-to-test path ".git/")))
+  "Git repository with submodules root directory matching criterion.
+You must set `repository-root-scan-directories-first' to non-nil in order to use 
+this rule together with `repository-root-matcher/git' in `repository-root-matchers'."
+  )
+
 (defconst repository-root-matcher/hg (cons 'repository-root-rule/root-contains ".hg/")
   "Mercurial repository root directory matching criterion."
   )
@@ -265,6 +273,19 @@ it is treated as the end-result root directory."
                                (string :tag "File/Directory/Regexp"))
                          function)))
 
+(defcustom repository-root-scan-directories-first nil
+  "Loop through parent directories for each matching criterion,
+instead of looping through matching criterions for each parent directory.
+Set this variable to non-nil if you're working both with nested / embedded
+repositories, and with regular ones.
+You should also place the matching rule for the embedding repository
+in `repository-root-matchers' before the rule for the embedded repository.
+E.g. for git with sub-modules, you should place
+`repository-root-matcher/git-submodules' before
+`repository-root-matcher/git' in `repository-root-matchers'."
+  :group 'repository-root
+  :type 'boolean)
+
 (defvar repository-root nil
   "Repository root cache.")
 
@@ -289,6 +310,33 @@ The result is cached (if possible) to speed up subsequent function calls."
       (set (make-local-variable 'repository-root) result))
     result))
 
+
+(defun repository-root-match (matcher path-to-test path)
+  "Return PATH-TO-TEST if it matches MATCHER,
+or nil if it does not."
+  (let ((found (cond ((and (consp matcher)
+                           (functionp (car matcher))
+                           (stringp (cdr matcher)))
+                      (apply (car matcher) (list path-to-test path (cdr matcher))))
+                     ((functionp matcher)
+                      (apply matcher (list path-to-test path)))
+                     (t nil))))
+    (if found
+      (if (stringp found)
+          found
+        path-to-test)
+      nil)))
+
+
+(defun repository-root-parent-directory (directory)
+  "Return parent directory of DIRECTORY,
+or nil if already at root directory."
+  (let ((parent (file-name-directory (directory-file-name directory))))
+    (if (string= parent directory)
+        nil
+      parent)))
+
+
 (defun repository-root-and-matcher-index (path)
   "Return a cons pair (ROOT . INDEX) containing the repository
 ROOT directory corresponding to the input PATH string,
@@ -298,41 +346,52 @@ position of the first successful matching criterion in the list
   (unless path
     (setq path ""))
   (setq path (expand-file-name path))
-  (let ((current (file-name-as-directory (if (file-directory-p path)
-                                             path
-                                           (file-name-directory path))))
+  (let ((initial-matchers (mapcar '(lambda (matcher)
+                                     ;; expand built-in matchers
+                                     (if (and (symbolp matcher)
+                                              (not (functionp matcher)))
+                                         (condition-case nil (eval matcher) (error nil))
+                                       matcher))
+                                  repository-root-matchers))
+        (initial-directory (file-name-as-directory (if (file-directory-p path)
+                                                       path
+                                                     (file-name-directory path))))
         (root nil)
         (index 0))
-    (while (and (not root) current)
-      (let ((count 0)
-            (matcher (car repository-root-matchers))
-            (matchers (cdr repository-root-matchers))
-            (found nil))
-        (while (and (not found) matcher)
-          ;; handle built-in matchers
-          (if (and (symbolp matcher)
-                   (not (functionp matcher)))
-              (setq matcher (condition-case nil (eval matcher) (error nil))))
-          ;; attempt to match
-          (setq found
-                (cond ((and (consp matcher)
-                            (functionp (car matcher))
-                            (stringp (cdr matcher)))
-                       (apply (car matcher) (list current path (cdr matcher))))
-                      ((functionp matcher)
-                       (apply matcher (list current path)))
-                      (t nil)))
-          (unless found
-            (setq count (1+ count)
-                  matcher (car matchers)
-                  matchers (cdr matchers))))
-        (if found
-            (setq root (if (stringp found) found current)
-                  index count)
-          (let ((next (file-name-directory (directory-file-name current))))
-            (setq current (if (string= next current)
-                              nil
-                            next))))))
+
+    (if repository-root-scan-directories-first
+        ;; outer loop: matchers
+        ;; inner loop: directories
+        (let ((matcher (car initial-matchers))
+              (matchers (cdr initial-matchers))
+              (count 0))
+          (while (and (not root) matcher)
+            (let ((directory initial-directory))
+              (while (and (not root) directory)
+                (setq root (repository-root-match matcher directory path))
+                (if root
+                    (setq index count)
+                  (setq directory (repository-root-parent-directory directory)))))
+            (unless root
+              (setq count (1+ count)
+                    matcher (car matchers)
+                    matchers (cdr matchers)))))
+      ;; outer loop: directories
+      ;; inner loop: matchers
+      (let ((directory initial-directory))
+        (while (and (not root) directory)
+          (let ((matcher (car initial-matchers))
+                (matchers (cdr initial-matchers))
+                (count 0))
+            (while (and (not root) matcher)
+              (setq root (repository-root-match matcher directory path))
+              (if root
+                  (setq index count)
+                (setq count (1+ count)
+                      matcher (car matchers)
+                      matchers (cdr matchers)))))
+          (unless root
+            (setq directory (repository-root-parent-directory directory))))))
     (cons root index)))
 
 (provide 'repository-root)
