@@ -245,13 +245,15 @@ contains the string 'regexp'."
   "List of repository root directory matching criterions.
 Currently, the following repository root matching criterions are supported:
 * Pre-defined (built-in) matchers (e.g. `repository-root-matcher/git').
-* Rules: a matching rule together with path string snippet. The default
-rule is that the path string has to match a file or directory in the repository
-root directory, but not in any of the repository's sub-directory.
-* Functions: with two input strings (parent-path-to-test path),
-that returns non-nil if parent-path-to-test is the repository root directory
-corresponding to the given path string. If the return value is a string,
-it is treated as the end-result root directory."
+* Rules: a matching rule together with a path string snippet or regexp.
+  The default rule is that the path string has to match a file or directory
+  in the repository root directory, but not in any of the repository's
+  sub-directory.
+* Functions: any function with two input string arguments
+  (PARENT-PATH-TO-TEST PATH), that returns non-nil if PARENT-PATH-TO-TEST
+  is the repository root directory corresponding to the given PATH string.
+  If the return value is a string, it is treated as the end-result root
+  directory."
   :group 'repository-root
   :type '(repeat (choice (symbol :tag "Built-in matcher"
                                  :value "repository-root-matcher/ignore"
@@ -283,11 +285,31 @@ instead of stopping after the first match is made.
 Exhaustive search is useful with nested / embedded repositories,
 e.g. git with submodules, but is less efficient than stopping at
 the first matching directory.
-Note that in this mode `repository-root' returns the topmost embedding
-repository root directory. Use `repository-root-list' to access the
-list of all matched directories."
+Note that in this mode `repository-root' returns, by default, the
+topmost embedding repository root directory. Use `repository-root-list'
+to access the list of all matched directories."
   :group 'repository-root
   :type 'boolean)
+
+
+(defcustom repository-root-return-closest-result nil
+  "Return closest matching repository root, instead of topmost one,
+when working with nested / embedded repositories and
+`repository-root-exhaustive-scan' is set to non-nil."
+  :group 'repository-root
+  :type 'boolean)
+
+
+(defcustom repository-root-force-scan nil
+  "Ignore cached results, and always scan for repository root directories.
+The results of `repository-root' and `repository-root-list' are cached
+by default, in order to avoid unnecessary disk access.
+In some situations it is desirable to ignore the cached results, at
+least temporarily, e.g. after the list of matching rules has been
+modified."
+  :group 'repository-root
+  :type 'boolean)
+
 
 (defvar repository-root-list nil
   "Repository root list cache.")
@@ -303,7 +325,8 @@ The result is cached (if possible) to speed up subsequent function calls."
                                      ""))))
   (let* ((file-name (buffer-file-name))
          (cache-allowed (and file-name (string= path (expand-file-name (buffer-file-name)))))
-         (cache (when (and cache-allowed
+         (cache (when (and (not repository-root-force-scan)
+                           cache-allowed
                            (local-variable-p 'repository-root-list))
                   repository-root-list))
          (result (if cache
@@ -323,7 +346,10 @@ input PATH string. Calls `repository-root-list'."
                                    (if (and (interactive-p) current-prefix-arg)
                                        (read-file-name "Path: ")
                                      ""))))
-  (car (repository-root-list path)))
+  (let ((result (repository-root-list path)))
+    (if repository-root-return-closest-result
+        (car (last result))
+      (car result))))
 
 (defun repository-root-match (matcher path-to-test path)
   "Return PATH-TO-TEST if it matches MATCHER,
