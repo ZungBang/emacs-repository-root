@@ -353,7 +353,9 @@ input PATH string. Calls `repository-root-list'."
 
 (defun repository-root-match (matcher path-to-test path)
   "Return PATH-TO-TEST if it matches MATCHER,
-or nil if it does not."
+or nil if it does not.
+If the result of applying the maching rule is a string, then
+this string is returned as the result, instead of PATH-TO-TEST."
   (let ((found (cond ((and (consp matcher)
                            (functionp (car matcher))
                            (stringp (cdr matcher)))
