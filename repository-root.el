@@ -1,10 +1,11 @@
 ;;; repository-root.el --- deduce the repository root directory for a given file
 
-;; Copyright (C) 2008 Avi Rozen
+;; Copyright (C) 2008-2012 Avi Rozen
 
 ;; Author: Avi Rozen <avi.rozen@gmail.com>
-;; Keywords: project, repository, root
-;; Version: %Id:%
+;; Keywords: project, repository, root, source control
+;; URL: https://github.com/ZungBang/emacs-repository-root
+;; Version: 1.0.3
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -431,3 +432,5 @@ with a single cons pair - namely, the result of the first call to
 
 
 (provide 'repository-root)
+
+;;; repository-root.el ends here
