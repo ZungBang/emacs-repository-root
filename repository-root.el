@@ -338,7 +338,7 @@ The result is cached (if possible) to speed up subsequent function calls."
       (set (make-local-variable 'repository-root-list) result))
     result))
 
-
+;;;###autoload
 (defun repository-root (&optional path)
   "Return the repository root directory corresponding to the
 input PATH string. Calls `repository-root-list'."
