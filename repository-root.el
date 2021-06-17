@@ -140,16 +140,16 @@ that matches RE."
   "Dummy matching criterion."
   )
 
-(defconst repository-root-matcher/git (cons 'repository-root-rule/root-contains ".git/")
+(defconst repository-root-matcher/git (lambda (parent-path-to-test path)
+                                        (or (repository-root-rule/root-contains parent-path-to-test path ".git")
+                                            (repository-root-rule/root-contains parent-path-to-test path ".git/")))
   "Git repository root directory matching criterion."
   )
 
 (defconst repository-root-matcher/git-submodules (lambda (parent-path-to-test path)
                                                    (and (repository-root-rule/root-contains parent-path-to-test path ".gitmodules")
                                                         (repository-root-rule/root-contains parent-path-to-test path ".git/")))
-  "Git repository with submodules root directory matching criterion.
-Please consider setting `repository-root-exhaustive-scan' to non-nil,
-when using this rule."
+  "Git repository with submodules root directory matching criterion."
   )
 
 (defconst repository-root-matcher/hg (cons 'repository-root-rule/root-contains ".hg/")
@@ -236,11 +236,10 @@ contains the string 'regexp'."
          (re (cdr rule)))
     (if (string-match ".*regexp.*" (symbol-name (car rule)))
         (condition-case data
-            (prog1 nil
-              (string-match (repository-root-tail-regexp re) "")
-              (error (widget-put widget :error (error-message-string data))
-                     widget))
-          nil))))
+            (string-match (repository-root-tail-regexp re) "")
+          (error (widget-put widget :error (error-message-string data))
+                 widget))
+      nil)))
 
 (defcustom repository-root-matchers nil
   "List of repository root directory matching criterions.
@@ -321,7 +320,7 @@ input PATH string. See also `repository-root-and-matcher-index'.
 The result is cached (if possible) to speed up subsequent function calls."
   (interactive)
   (setq path (expand-file-name (or path
-                                   (if (and (interactive-p) current-prefix-arg)
+                                   (if (and (called-interactively-p 'any) current-prefix-arg)
                                        (read-file-name "Path: ")
                                      ""))))
   (let* ((file-name (buffer-file-name))
@@ -344,7 +343,7 @@ The result is cached (if possible) to speed up subsequent function calls."
 input PATH string. Calls `repository-root-list'."
   (interactive)
   (setq path (expand-file-name (or path
-                                   (if (and (interactive-p) current-prefix-arg)
+                                   (if (and (called-interactively-p 'any) current-prefix-arg)
                                        (read-file-name "Path: ")
                                      ""))))
   (let ((result (repository-root-list path)))
@@ -410,12 +409,12 @@ is reached. If `repository-root-exhaustive-scan' is nil, return a list
 with a single cons pair - namely, the result of the first call to
 `repository-root-and-matcher-index'."
   (unless matchers-list
-    (setq matchers-list (mapcar '(lambda (matcher)
-                                   ;; expand built-in matchers
-                                   (if (and (symbolp matcher)
-                                            (not (functionp matcher)))
-                                       (condition-case nil (eval matcher) (error nil))
-                                     matcher))
+    (setq matchers-list (mapcar #'(lambda (matcher)
+                                    ;; expand built-in matchers
+                                    (if (and (symbolp matcher)
+                                             (not (functionp matcher)))
+                                        (condition-case nil (eval matcher) (error nil))
+                                      matcher))
                                 repository-root-matchers)))
   (if path
       (let* ((result (repository-root-and-matcher-index path matchers-list))
